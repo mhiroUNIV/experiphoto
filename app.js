@@ -10,7 +10,7 @@ import * as queue from './queue.js';
 import { exifDate } from './exif.js';
 import { review } from './review.js';
 
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 const INBOX = '/受け箱';
 const UNSORTED = { id: '未分類', name: '未分類', color: '#8a8a85', experiments: [] };
 const SHRINK_TO = 2048;
@@ -134,9 +134,21 @@ async function shrink(file) {
 }
 
 // ---- 写真を受け取って、キューに入れる ----
+// 受け取った写真を、すぐに携帯のメモリーへ読み込んでおく。
+// Android の Chrome では、選んだ写真のファイルを時間がたってから読むと読めないことがあり、
+// 送信待ち（IndexedDB）に入れるとき「Failed to write blobs」で失敗していた（確かめている間に時間がたつ 2 枚目以降）
+async function toMemory(files) {
+  const read = await Promise.allSettled(
+    files.map(async (f) => new File([await f.arrayBuffer()], f.name, { type: f.type, lastModified: f.lastModified })),
+  );
+  const bad = read.filter((r) => r.status === 'rejected').length;
+  if (bad) toast(`${bad} 枚の写真を読めませんでした。もう一度選んでください`, true);
+  return read.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+}
+
 // source は camera（撮る）か library（撮ってある写真から選ぶ）
 async function onFiles(fileList, source = 'library') {
-  const files = [...(fileList || [])];
+  const files = await toMemory([...(fileList || [])]);
   if (!files.length) return;
   // 行き先は、受け取ったときに選ばれていたもの（確かめている間に変えても、この写真たちは同じ所へ）
   const to = { p: currentProject(), exp: currentExperiment(), memo: cleanMemo(S.memo) };
@@ -161,7 +173,13 @@ async function onFiles(fileList, source = 'library') {
       if (r.error) toast(`${r.error}。元の写真を送ります`, true);
       edited = r.edited;
     }
-    await enqueue(f, edited, to);
+    // 1 枚入れられなくても、残りの写真は続ける
+    try {
+      await enqueue(f, edited, to);
+    } catch (ex) {
+      toast(`${i + 1} 枚目を送信待ちに入れられませんでした（${ex.message || ex}）。もう一度選んでください`, true);
+      continue;
+    }
     sent++;
     // 1 枚ずつ送り始める（次の写真を確かめている間に送れる）
     saveLog();
