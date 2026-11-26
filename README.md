@@ -56,6 +56,7 @@ python3 -m http.server 8790 --bind 127.0.0.1
 | `app.js` | 選ぶ・撮る・送る・送った一覧 |
 | `dropbox.js` | Dropbox とのやり取り（PKCE、アップロード、お試し） |
 | `queue.js` | 送る前の写真を溜める IndexedDB |
+| `exif.js` | 写真の中の記録（EXIF）から撮った日時を読む |
 | `config.js` | Dropbox の App key |
 | `sw.js`・`manifest.webmanifest`・`icons/` | ホーム画面に置くための部品（`tools/make-icon.py` でアイコンを描く） |
 

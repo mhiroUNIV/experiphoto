@@ -7,8 +7,9 @@
 import { DROPBOX_APP_KEY } from './config.js';
 import { createDropbox, createMockDropbox, OfflineError, AuthError } from './dropbox.js';
 import * as queue from './queue.js';
+import { exifDate } from './exif.js';
 
-const VERSION = '0.1.2';
+const VERSION = '0.1.3';
 const INBOX = '/受け箱';
 const UNSORTED = { id: '未分類', name: '未分類', color: '#8a8a85', experiments: [] };
 const SHRINK_TO = 2048;
@@ -77,8 +78,17 @@ const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 
 const extOf = (f) => EXT[f.type] || (/\.[a-z0-9]{2,5}$/i.exec(f.name || '')?.[0] || '.jpg').toLowerCase().replace('.jpeg', '.jpg');
 const photoName = (d, memo, ext) => `${stamp(d)}${memo ? ` ${memo}` : ''}${ext}`;
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-// 撮った時刻。おかしな値（0 や未来）なら今
-function takenAt(f) {
+// 撮った時刻。写真の中の記録（EXIF）を先に見る（Android は、選んだ写真のファイル日時を「選んだ時刻」にして渡すことがある）。
+// 記録が無ければファイルの日時、それもおかしな値（0 や未来）なら今
+async function takenAt(f) {
+  if (/jpe?g/i.test(f.type) || /\.jpe?g$/i.test(f.name || '')) {
+    try {
+      const d = exifDate(await f.slice(0, 256 * 1024).arrayBuffer());
+      if (d) return d;
+    } catch {
+      // 読めなければファイルの日時へ
+    }
+  }
   const t = Number(f.lastModified);
   return new Date(t > 946684800000 && t < Date.now() + 86400000 ? t : Date.now());
 }
@@ -129,7 +139,7 @@ async function onFiles(fileList) {
   const exp = currentExperiment();
   const memo = cleanMemo(S.memo);
   for (const f of files) {
-    const at = takenAt(f);
+    const at = await takenAt(f);
     let blob = f;
     let ext = extOf(f);
     if (S.shrink && /^image\/(jpeg|png|webp)$/.test(f.type)) {
