@@ -8,7 +8,7 @@ import { DROPBOX_APP_KEY } from './config.js';
 import { createDropbox, createMockDropbox, OfflineError, AuthError } from './dropbox.js';
 import * as queue from './queue.js';
 
-const VERSION = '0.1.1';
+const VERSION = '0.1.2';
 const INBOX = '/受け箱';
 const UNSORTED = { id: '未分類', name: '未分類', color: '#8a8a85', experiments: [] };
 const SHRINK_TO = 2048;
@@ -332,7 +332,7 @@ function renderProjects() {
   );
   const note = $('projects-note');
   note.textContent = S.listMissing
-    ? 'Mac の Research Hub がまだプロジェクトの一覧を置いていません。いまは「未分類」に送れます（Mac で振り分けられます）。'
+    ? 'プロジェクトと実験ノートの一覧が、まだ Mac から届いていません。Mac で Research Hub を開き直すと届きます（届いたら ↻ を押す）。いまは「未分類」に送れて、Mac で振り分けられます。'
     : !S.list
       ? 'プロジェクトの一覧を読んでいます…'
       : '';
@@ -343,8 +343,9 @@ function renderExperiment() {
   const p = currentProject();
   const exps = p.experiments || [];
   const cur = currentExperiment();
+  const empty = S.listMissing ? '一覧が Mac から届くと選べます' : 'このプロジェクトには最近の実験ノートがありません';
   sel.replaceChildren(
-    el('option', { value: '' }, exps.length ? '選ばない（プロジェクトの写真として送る）' : 'このプロジェクトには最近の実験ノートがありません'),
+    el('option', { value: '' }, exps.length ? '選ばない（プロジェクトの写真として送る）' : empty),
     ...exps.map((e) => el('option', { value: e.path, selected: cur?.path === e.path }, e.title)),
   );
   sel.value = cur?.path || '';
