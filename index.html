@@ -79,6 +79,11 @@
           <span>縮小して送る（長い辺を 2048px に。通信量を減らしたいとき）</span>
         </label>
         <p class="muted small">ふだんは原寸のまま送ります。ブロットやゲルの細部を残すためです。</p>
+        <label class="check">
+          <input id="opt-review" type="checkbox" />
+          <span>撮ったあとに確かめる（切り取り・回転・撮り直し）</span>
+        </label>
+        <p class="muted small">切り取りも回転もしなければ、撮った写真をそのまま送ります。</p>
         <hr />
         <p id="account" class="small"></p>
         <button id="btn-disconnect" type="button">Dropbox との接続を外す</button>
@@ -87,6 +92,34 @@
         <p class="muted small" id="version"></p>
         <button value="close" class="primary">閉じる</button>
       </form>
+    </dialog>
+
+    <!-- 撮ったあとの確認：切り取り・回転・撮り直し -->
+    <dialog id="review" class="review">
+      <div class="review-head">
+        <span id="rv-count"></span>
+        <span id="rv-target" class="ellipsis"></span>
+      </div>
+      <div id="rv-stage" class="review-stage">
+        <div id="rv-frame" class="review-frame">
+          <canvas id="rv-canvas"></canvas>
+          <div id="rv-crop" class="crop">
+            <i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i>
+            <i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i>
+          </div>
+        </div>
+      </div>
+      <p class="review-hint">白い丸を動かすと切り取れます。枠の中をなぞると枠ごと動きます。</p>
+      <div class="review-tools">
+        <button id="rv-rotate" type="button">⟳ 右に 90°</button>
+        <button id="rv-reset" type="button">元に戻す</button>
+      </div>
+      <div class="review-actions">
+        <button id="rv-retake" type="button">撮り直す</button>
+        <button id="rv-skip" type="button">送らない</button>
+        <button id="rv-send" type="button" class="primary">送る</button>
+      </div>
+      <button id="rv-rest" type="button" class="review-rest"></button>
     </dialog>
 
     <div id="toast" class="toast" hidden></div>

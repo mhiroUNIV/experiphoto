@@ -8,8 +8,9 @@ import { DROPBOX_APP_KEY } from './config.js';
 import { createDropbox, createMockDropbox, OfflineError, AuthError } from './dropbox.js';
 import * as queue from './queue.js';
 import { exifDate } from './exif.js';
+import { review } from './review.js';
 
-const VERSION = '0.1.3';
+const VERSION = '0.2.0';
 const INBOX = '/受け箱';
 const UNSORTED = { id: '未分類', name: '未分類', color: '#8a8a85', experiments: [] };
 const SHRINK_TO = 2048;
@@ -56,6 +57,7 @@ const S = {
   memos: store.get('ep.app.memos', []),
   log: store.get('ep.app.log', []),
   shrink: store.get('ep.app.shrink', false),
+  review: store.get('ep.app.review', true), // 撮ったあとに確かめる（切り取り・回転・撮り直し）
   sending: false,
   authLost: null,
   lastListLoad: 0,
@@ -132,43 +134,70 @@ async function shrink(file) {
 }
 
 // ---- 写真を受け取って、キューに入れる ----
-async function onFiles(fileList) {
+// source は camera（撮る）か library（撮ってある写真から選ぶ）
+async function onFiles(fileList, source = 'library') {
   const files = [...(fileList || [])];
   if (!files.length) return;
-  const p = currentProject();
-  const exp = currentExperiment();
-  const memo = cleanMemo(S.memo);
-  for (const f of files) {
-    const at = await takenAt(f);
-    let blob = f;
-    let ext = extOf(f);
-    if (S.shrink && /^image\/(jpeg|png|webp)$/.test(f.type)) {
-      try {
-        blob = await shrink(f);
-        ext = '.jpg';
-      } catch {
-        // 縮小できなければ原寸で送る
-      }
+  // 行き先は、受け取ったときに選ばれていたもの（確かめている間に変えても、この写真たちは同じ所へ）
+  const to = { p: currentProject(), exp: currentExperiment(), memo: cleanMemo(S.memo) };
+  const target = `→ ${to.p.name || to.p.id}${to.exp ? ` ／ ${to.exp.title}` : ''}${to.memo ? ` ／ 「${to.memo}」` : ''}`;
+  let check = S.review;
+  let sent = 0;
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    let edited = null;
+    if (check) {
+      const r = await review(f, {
+        index: i,
+        total: files.length,
+        source,
+        target,
+        maxSide: S.shrink ? SHRINK_TO : 0,
+        onRetake: () => $('in-camera').click(),
+      });
+      if (r.action === 'skip') continue;
+      if (r.action === 'retake') break;
+      if (r.action === 'rest') check = false;
+      if (r.error) toast(`${r.error}。元の写真を送ります`, true);
+      edited = r.edited;
     }
-    const thumb = await makeThumb(f).catch(() => null);
-    const id = newId();
-    const job = {
-      id,
-      addedAt: Date.now(),
-      dir: `${INBOX}/${p.id}`,
-      name: photoName(at, memo, ext),
-      blob,
-      uploadedName: null,
-      // どの実験ノート向けか。ノートを選んだときだけ、写真の横に置く
-      sidecar: exp ? { v: 1, project: p.id, experiment: { title: exp.title, path: exp.path }, memo, takenAt: at.toISOString() } : null,
-    };
-    await queue.put(job);
-    S.log.unshift({ id, name: job.name, project: p.name, color: p.color, memo, experiment: exp?.title || null, at: at.toISOString(), status: 'waiting', thumb });
+    await enqueue(f, edited, to);
+    sent++;
+    // 1 枚ずつ送り始める（次の写真を確かめている間に送れる）
+    saveLog();
+    render();
+    processQueue();
   }
-  rememberMemo(memo);
-  saveLog();
-  render();
-  processQueue();
+  if (sent) rememberMemo(to.memo);
+}
+
+// 1 枚をキューに入れる。edited は切り取り・回転した写真（無ければ元の写真）
+async function enqueue(f, edited, { p, exp, memo }) {
+  const at = await takenAt(f); // 名前の時刻は、切り取る前の写真の記録から
+  let blob = edited || f;
+  let ext = edited ? '.jpg' : extOf(f);
+  if (!edited && S.shrink && /^image\/(jpeg|png|webp)$/.test(f.type)) {
+    try {
+      blob = await shrink(f);
+      ext = '.jpg';
+    } catch {
+      // 縮小できなければ原寸で送る
+    }
+  }
+  const thumb = await makeThumb(blob).catch(() => null);
+  const id = newId();
+  const job = {
+    id,
+    addedAt: Date.now(),
+    dir: `${INBOX}/${p.id}`,
+    name: photoName(at, memo, ext),
+    blob,
+    uploadedName: null,
+    // どの実験ノート向けか。ノートを選んだときだけ、写真の横に置く
+    sidecar: exp ? { v: 1, project: p.id, experiment: { title: exp.title, path: exp.path }, memo, takenAt: at.toISOString() } : null,
+  };
+  await queue.put(job);
+  S.log.unshift({ id, name: job.name, project: p.name, color: p.color, memo, experiment: exp?.title || null, at: at.toISOString(), status: 'waiting', thumb });
 }
 
 function rememberMemo(memo) {
@@ -193,8 +222,14 @@ function setStatus(id, status, extra = {}) {
 // ---- 送る（1枚ずつ、古い順に） ----
 let retryTimer = null;
 async function processQueue() {
-  if (S.sending || !dbx.connected()) return;
+  if (!dbx.connected()) return;
+  // 送っている間に入った写真は、いまの回が終わってから、もう一回りして送る
+  if (S.sending) {
+    S.sendAgain = true;
+    return;
+  }
   S.sending = true;
+  S.sendAgain = false;
   clearTimeout(retryTimer);
   renderQueueState();
   let offline = false;
@@ -232,6 +267,7 @@ async function processQueue() {
     render();
   }
   if (offline) retryTimer = setTimeout(processQueue, 30_000);
+  else if (S.sendAgain && !S.authLost) processQueue();
 }
 
 async function retry(id) {
@@ -480,19 +516,20 @@ function wire() {
   });
   for (const id of ['in-camera', 'in-library']) {
     $(id).addEventListener('change', async (e) => {
-      const files = e.target.files;
+      const files = [...e.target.files]; // 撮り直しで同じ入力欄が使われるので、先に写す
+      e.target.value = ''; // 同じ写真をもう一度選んでも動くように
       try {
-        await onFiles(files);
+        await onFiles(files, id === 'in-camera' ? 'camera' : 'library');
       } catch (ex) {
         toast(ex.message || '写真を受け取れませんでした', true);
       }
-      e.target.value = ''; // 同じ写真をもう一度選んでも動くように
     });
   }
 
   const dlg = $('settings');
   $('btn-settings').addEventListener('click', async () => {
     $('opt-shrink').checked = S.shrink;
+    $('opt-review').checked = S.review;
     $('version').textContent = `ExperiPhoto ${VERSION}${dbx.demo ? '（お試し：Dropbox には送りません。?demo=0 で終わる）' : ''}`;
     $('btn-disconnect').hidden = !dbx.connected();
     $('account').textContent = dbx.connected() ? 'Dropbox：確かめています…' : 'Dropbox：つながっていません';
@@ -505,6 +542,10 @@ function wire() {
   $('opt-shrink').addEventListener('change', (e) => {
     S.shrink = e.target.checked;
     store.set('ep.app.shrink', S.shrink);
+  });
+  $('opt-review').addEventListener('change', (e) => {
+    S.review = e.target.checked;
+    store.set('ep.app.review', S.review);
   });
   $('btn-disconnect').addEventListener('click', async () => {
     const n = (await queue.all()).length;

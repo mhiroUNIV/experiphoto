@@ -1,7 +1,7 @@
 // 実験室で電波が弱くても開けるように、画面のファイルだけを手元に置く。
 // Dropbox への通信（別のサイト）には手を出さない。直したら VERSION を上げる
-const VERSION = 'experiphoto-0.1.3';
-const SHELL = ['./', 'index.html', 'app.js', 'dropbox.js', 'queue.js', 'exif.js', 'config.js', 'style.css', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
+const VERSION = 'experiphoto-0.2.0';
+const SHELL = ['./', 'index.html', 'app.js', 'dropbox.js', 'queue.js', 'exif.js', 'review.js', 'config.js', 'style.css', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
