@@ -8,7 +8,7 @@ import { DROPBOX_APP_KEY } from './config.js';
 import { createDropbox, createMockDropbox, OfflineError, AuthError } from './dropbox.js';
 import * as queue from './queue.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 const INBOX = '/受け箱';
 const UNSORTED = { id: '未分類', name: '未分類', color: '#8a8a85', experiments: [] };
 const SHRINK_TO = 2048;
