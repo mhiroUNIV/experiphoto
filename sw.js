@@ -1,6 +1,6 @@
 // 実験室で電波が弱くても開けるように、画面のファイルだけを手元に置く。
 // Dropbox への通信（別のサイト）には手を出さない。直したら VERSION を上げる
-const VERSION = 'experiphoto-0.2.2';
+const VERSION = 'experiphoto-0.2.3';
 const SHELL = ['./', 'index.html', 'app.js', 'dropbox.js', 'queue.js', 'exif.js', 'review.js', 'config.js', 'style.css', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

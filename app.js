@@ -10,7 +10,7 @@ import * as queue from './queue.js';
 import { exifDate } from './exif.js';
 import { review } from './review.js';
 
-const VERSION = '0.2.2';
+const VERSION = '0.2.3';
 const INBOX = '/受け箱';
 const UNSORTED = { id: '未分類', name: '未分類', color: '#8a8a85', experiments: [] };
 const SHRINK_TO = 2048;
@@ -224,8 +224,11 @@ function rememberMemo(memo) {
   store.set('ep.app.memos', S.memos);
 }
 
+// 「送った写真」は直近 LOG_KEEP 枚だけ残す。送信待ち・送信中のものは数えずに全部残す（送る前に一覧から消えないように）
+const LOG_KEEP = 30;
 function saveLog() {
-  S.log = S.log.slice(0, 60).map((e, i) => (i < 30 ? e : { ...e, thumb: null }));
+  let n = 0;
+  S.log = S.log.filter((e) => e.status === 'waiting' || e.status === 'sending' || ++n <= LOG_KEEP);
   store.set('ep.app.log', S.log);
 }
 
@@ -456,7 +459,7 @@ function renderSent() {
   const ul = $('sent');
   $('sent-empty').hidden = S.log.length > 0;
   ul.replaceChildren(
-    ...S.log.slice(0, 40).map((e) => {
+    ...S.log.map((e) => {
       const d = new Date(e.at);
       const [icon, label] = STATUS[e.status] || STATUS.waiting;
       return el(
