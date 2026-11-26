@@ -10,7 +10,7 @@ import * as queue from './queue.js';
 import { exifDate } from './exif.js';
 import { review } from './review.js';
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const INBOX = '/受け箱';
 const UNSORTED = { id: '未分類', name: '未分類', color: '#8a8a85', experiments: [] };
 const SHRINK_TO = 2048;

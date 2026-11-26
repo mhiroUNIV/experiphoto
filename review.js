@@ -166,9 +166,13 @@ function wire() {
     cur.crop = full();
     draw();
   });
-  // 戻る操作でうっかり閉じない。閉じてしまったら、写真をなくさないように、そのまま送る
+  // 戻る操作でうっかり閉じない。閉じてしまったら、写真をなくさないように、そのまま送る。
+  // 「閉じた」の知らせは後から届くので、次の写真で開き直したあとに届いた前の写真の知らせは無視する
+  // （無視しないと、次の写真を確かめる前に送ってしまう）
   $('review').addEventListener('cancel', (e) => e.preventDefault());
-  $('review').addEventListener('close', () => finish('send'));
+  $('review').addEventListener('close', () => {
+    if (!$('review').open) finish('send');
+  });
   window.addEventListener('resize', () => cur && !cur.finishing && draw());
 
   const box = $('rv-crop');
